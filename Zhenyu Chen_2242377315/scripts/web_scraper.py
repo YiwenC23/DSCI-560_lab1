@@ -5,54 +5,87 @@ Email: zhenyuch@usc.edu
 '''
 
 import os
+import sys
+import time
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service as ChromeService
 
-def get_html(url):
+
+def get_static_data():
 	try:
 		response = requests.get(url)
 		response.raise_for_status()
-		print("Successfully fetched web data!\n")
-		return response.content
+		
+		static_soup = BeautifulSoup(response.text, "html.parser")
+		print("Successfully fetched static data!\n")
+		return static_soup
+	
 	except requests.RequestException as e:
-		print(f"Failed to fetch web data. Reason: {e}")
-		return None
+		print(f"Failed to fetch static data. Reason: {e}")
+		sys.exit()
 
-def parse_html(data):
-	if not data:
-		return None
+def get_dynamic_data():
 	try:
-		soup = BeautifulSoup(data, "html.parser")
-		print("Successfully parsed HTML!\n")
-		return soup
+		options = webdriver.ChromeOptions()
+		options.add_argument("--headless")
+		options.add_argument("--disable-gpu")
+		options.add_argument("--no-sandbox")
+		
+		driver = webdriver.Chrome(options = options, service = ChromeService(ChromeDriverManager().install()))
+		driver.get(url)
+		time.sleep(10)
+		html_handle = driver.page_source
+		driver.quit()
+		
+		dynamic_soup = BeautifulSoup(html_handle, "html.parser")
+		print("Successfully fetched dynamic market data!\n")
+		return dynamic_soup
+	
 	except Exception as e:
-		print(f"Failed to parse HTML. Reason: {e}")
-		return None
+		print(f"Getting dynamic data failed. Reason: {e}")
+		sys.exit()
 
-def save_html(soup):
-	if not soup:
-		return False
+
+def generate_web_data():
+	try:
+		print("Gathering static data...")
+		static_soup = get_static_data()
+		
+		print("Gathering dynamic data...")
+		dynamic_soup = get_dynamic_data()
+		
+		print("Getting complete web data by replacing the section tag in static data with the one in dynamic data...")
+		static_soup.section.replace_with(dynamic_soup.section)
+		
+		print("Successfully generated complete web data!\n")
+		return static_soup
+	
+	except Exception as e:
+		print(f"Generating web data failed. Reason: {e}")
+		sys.exit()
+
+
+def save_web_data(web_data):
 	try:
 		with open(output_path, "w", encoding = "utf-8") as f:
-			f.write(soup.prettify())
-		return True
+			f.write(web_data.prettify())
+		print("Successfully stored web data in an HTML file!\n")
 	except Exception as e:
-		print(f"Failed to write HTML to file. Reason: {e}")
-		return False
+		print(f"Storing web data in an HTML file failed. Reason: {e}")
+
 
 if __name__ == "__main__":
-	CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-	output_path = os.path.join(CURRENT_DIR, "../data/raw_data/web_data.html")
 	url = "https://www.cnbc.com/world/?region=world"
 	
-	print("Gathering web data...")
-	web_data = get_html(url)
+	CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+	output_path = os.path.join(CURRENT_DIR, "../data/raw_data/web_data.html")
 	
-	print("Parsing HTML...")
-	soup = parse_html(web_data)
+	web_data = generate_web_data()
 	
-	print("Writing HTML to file...")
-	if save_html(soup):
-		print("Successfully completed web scraping!")
-	else:
-		print("Web scraping failed!")
+	print("Storing web data in an HTML file...")
+	save_web_data(web_data)
+
+	print("Web Scraping Completed!")
